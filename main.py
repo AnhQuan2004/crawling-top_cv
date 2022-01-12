@@ -15,7 +15,6 @@ from datetime import timedelta
 
 #Define 
 all_link = []
-content = []
 all_link_del_duplicates = []
 notice = 'Information is missed'
 
@@ -25,7 +24,7 @@ option = webdriver.FirefoxOptions()
 option.add_argument ('--ignore-certificate-errors')
 option.add_argument ("--igcognito")
 option.add_argument ("--window-size=1920x1080")
-#option.add_argument ('--headless')
+option.add_argument ('--headless')
 option.add_argument("--no-sandbox")
 option.add_argument("--disable-dev-shm-usage")
 
@@ -110,6 +109,7 @@ for url in all_link_del_duplicates:
     for i in soup.find_all("div",{"class":"requirements"}):
         requirements = i.text.replace("\n","").replace("\r","").replace("\t","").strip()
 
+    content = []
     information = soup.find_all("div",{"class":"row summary-item"})
     for i in information:
         content.append(i.find("span",{"class":"content"}).text.replace('\xa0','').replace('\n', '').replace('  ',"").strip())
@@ -118,11 +118,6 @@ for url in all_link_del_duplicates:
         upload_date = content[0]
     except IndexError:
         upload_date = notice
-
-    expiration_str = soup.find("span",{"class":"expiry"}).text.replace("\n","").strip()
-    number_expiration_date = re.findall(r'\d+', expiration_str)[0]
-
-    expiration_date = (datetime.strptime(upload_date, '%d/%m/%Y').date() + timedelta(days=int(number_expiration_date))).strftime('%d/%m/%y')
 
     try:
         position = content[1]
@@ -154,6 +149,9 @@ for url in all_link_del_duplicates:
     except IndexError:
         number_employees = notice
 
+    expiration_str = soup.find("span",{"class":"expiry"}).text.replace("\n","").strip()
+    number_expiration_date = re.findall(r'\d+', expiration_str)[0]
+    expiration_date = (datetime.strptime(upload_date, '%d/%m/%Y').date() + timedelta(days=int(number_expiration_date))).strftime('%d/%m/%y')
 
     data = {
         "name": name_job,
