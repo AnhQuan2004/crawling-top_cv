@@ -1,181 +1,65 @@
-#Import the packages
-from selenium import webdriver
-from selenium.common.exceptions import NoSuchElementException
-from webdriver_manager.firefox import GeckoDriverManager
-
+import cloudscraper
 from bs4 import BeautifulSoup
-
 import time
-import json
-import re
+import random
 
-from datetime import datetime
-from datetime import timedelta
+# Base URL of the website you want to scrape
+base_url = 'https://www.topcv.vn/tim-viec-lam-frontend?sba=1&page='
 
+# Create a scraper instance
+scraper = cloudscraper.create_scraper(browser='chrome')
 
-#Define 
-all_link = []
-all_link_del_duplicates = []
-notice = 'Information is missed'
+# Add custom headers
+headers = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.5',
+    'Referer': 'https://www.topcv.vn/',
+    'DNT': '1',
+    'Connection': 'keep-alive',
+    'Upgrade-Insecure-Requests': '1',
+}
 
+# Path to save the URLs to a text file
+file_output_path = 'extracted_urls.txt'
 
-#Chrome Options
-option = webdriver.FirefoxOptions()
-option.add_argument ('--ignore-certificate-errors')
-option.add_argument ("--igcognito")
-option.add_argument ("--window-size=1920x1080")
-option.add_argument ('--headless')
-option.add_argument("--no-sandbox")
-option.add_argument("--disable-dev-shm-usage")
+# Define the range of pages you want to scrape
+start_page = 1
+end_page = 3
 
+try:
+    # Open the file to save the URLs
+    with open(file_output_path, 'w') as file:
+        # Loop through each page
+        for i in range(start_page, end_page + 1):
+            # Construct the URL for each page
+            url = f'{base_url}{i}'
 
-#Set path for webdriver
-driver = webdriver.Firefox(executable_path=GeckoDriverManager().install(), options=option)
+            # Add a random delay before making the request
+            time.sleep(random.uniform(2, 5))
 
-#Open log-in url
-driver.get("https://secure.vietnamworks.com/login/vi?client_id=3") 
-driver.maximize_window()
+            # Send a GET request for each page
+            response = scraper.get(url, headers=headers)
 
+            # Check if the request was successful
+            if response.status_code == 200:
+                # Parse the HTML content of the page
+                soup = BeautifulSoup(response.text, 'html.parser')
 
-#Time-wait
-time.sleep(10)
+                # Find all <a> tags within elements that have the class "title"
+                title_links = soup.select('.title a')
 
+                # Extract URLs and save to the text file
+                for link in title_links:
+                    href = link.get('href')
+                    if href:
+                        file.write(href + '\n')
+                        print(href)  # Optional: print each URL to the console
 
-#Fill the log-in information
-driver.find_element_by_id("email").send_keys("")
-driver.find_element_by_id('login__password').send_keys("")
-driver.find_element_by_id("button-login").click()
+            else:
+                print(f"Failed to retrieve page {i}. Status code: {response.status_code}")
 
-#Crawl all the links of job
-url = 'https://www.vietnamworks.com/tim-viec-lam/tat-ca-viec-lam'
-driver.get(url)
-time.sleep(3)
+    print(f"URLs successfully saved to {file_output_path}")
 
-page_num = 1
-driver.execute_script("window.scrollTo(0, document.body.scrollHeight/2);")
-
-while True:
-    #crawl all the link in each page
-    page_source = driver.page_source
-    soup = BeautifulSoup(page_source,"html.parser")
-    block_job_list = soup.find_all("div",{"class":"block-job-list"})
-    for i in block_job_list:
-        link_catalogue = i.find_all("div",{"class":"col-12 col-lg-8 col-xl-8 p-0 wrap-new"})
-        for j in link_catalogue:
-            link = j.find("a")
-            all_link.append("https://www.vietnamworks.com" + link.get("href"))
-
-    # moves to next page
-    try:
-        print(f'On page {str(page_num)}')
-        print()
-        page_num+=1
-        driver.find_element_by_link_text(str(page_num)).click()
-        time.sleep(3)
-
-    # checks only at the end of the page
-    except NoSuchElementException:
-        print('End of pages')
-        break
-
-#Remove all duplicates links
-[all_link_del_duplicates.append(x) for x in all_link if x not in all_link_del_duplicates]
-
-print("\n".join(all_link_del_duplicates))
-print(len(all_link_del_duplicates))
-
-datas = {}
-datas['jobs'] = []
-
-#Enter to every links to crawl the data
-for url in all_link_del_duplicates:
-    page = driver.get(url)
-    soup = BeautifulSoup(driver.page_source, "html.parser")
-    name_job = soup.find("h1",{"class":"job-title"}).text.replace("\n","").strip()
-
-    name_company = soup.find("div",{"class","company-name"}).text.replace("\n","").strip()
-
-    name_location = soup.find("span",{"class":"company-location"}).text.replace("\n","").strip()
-
-    salary = soup.find("span",{"class":"salary"}).text.replace("\n","").strip()
-
-    for i in soup.find_all("div",{"class":"benefits"}):
-        benefits = " ".join(i.text.split())
-
-    job_description = soup.find("div",{"class":"job-description"})
-    for i in job_description.find_all("div",{"class":"description"}):
-        description = i.text.replace("\n","").replace("\r","").replace("\t","").strip()
-
-    for i in soup.find_all("div",{"class":"requirements"}):
-        requirements = i.text.replace("\n","").replace("\r","").replace("\t","").strip()
-
-    content = []
-    information = soup.find_all("div",{"class":"row summary-item"})
-    for i in information:
-        content.append(i.find("span",{"class":"content"}).text.replace('\xa0','').replace('\n', '').replace('  ',"").strip())
-
-    try:
-        upload_date = content[0]
-    except IndexError:
-        upload_date = notice
-
-    try:
-        position = content[1]
-    except IndexError:
-        position = notice
-
-    try:
-        career = content[2]
-    except IndexError:
-        career = notice
-
-    try:
-        skill = content[3]
-    except IndexError:
-        skill = notice
-
-    try:
-        language_of_cv = content[4]
-    except IndexError:
-        language_of_cv = notice
-
-    try:
-        detail_address = content[5]
-    except IndexError:
-        detail_address = notice
-
-    try:
-        number_employees = content[6]
-    except IndexError:
-        number_employees = notice
-
-    expiration_str = soup.find("span",{"class":"expiry"}).text.replace("\n","").strip()
-    number_expiration_date = re.findall(r'\d+', expiration_str)[0]
-    expiration_date = (datetime.strptime(upload_date, '%d/%m/%Y').date() + timedelta(days=int(number_expiration_date))).strftime('%d/%m/%y')
-
-    data = {
-        "name": name_job,
-        "salary": salary,
-        "upload_date": upload_date,
-        "expiration_date": expiration_date,
-        "locations": name_location,
-        "skill": skill,
-        "career": career,
-        "company": name_company,
-        "job_position": position,
-        "number_employees": number_employees,
-        "detail_address": detail_address,
-        "language_cv": language_of_cv,
-        "benefits": benefits,
-        "description": description,
-        "requirements": requirements,
-        "link_job" : url,
-    }
-    
-    datas['jobs'].append(data)
-
-driver.quit()
-
-file = open("vietnamworks.json", "w")
-json.dump(datas, file)
-file.close()
+except Exception as e:
+    print(f"An error occurred: {str(e)}")
